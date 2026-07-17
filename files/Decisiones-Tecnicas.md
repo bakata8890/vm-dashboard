@@ -4,28 +4,25 @@
 
 El requisito de la prueba (cookie HttpOnly, JWT nunca en el body/localStorage) empuja
 naturalmente a un patrón BFF: el frontend jamás debe saber que un token existe. Separar
-BFF de API Core además nos permite aplicar el mismo control de acceso service-to-service
-que ya usaste en FairRide (SDD v5, `SERVICE_URL` audience validation) — reutilización directa
-de un patrón que ya validaste en producción, no algo nuevo que aprender.
+BFF de API Core además permite aplicar el patrón estándar de IAM service-to-service en GCP
+(`SERVICE_URL` audience validation con OIDC), aislando la API Core de todo tráfico externo
+sin necesidad de gestión de secretos en producción.
 
 ## 2. Por qué Go para ambos servicios
 
-Es tu stack más fuerte, arquitectura hexagonal ya interiorizada, y te permite mover
-velocidad de desarrollo hacia el frontend, que es donde más pesa la evaluación y donde
-menos terreno dominas. No tiene sentido gastar horas de aprendizaje en un backend framework
-nuevo cuando el riesgo real del ejercicio está en React.
+Go permite una arquitectura hexagonal madura con bajo overhead de desarrollo, liberando
+tiempo para profundizar en el frontend, que concentra el mayor peso de evaluación según el
+enunciado. Invertir tiempo en aprender un nuevo framework de backend habría consumido el
+mismo presupuesto de horas que el frontend requiere.
 
-## 3. Estado global y Optimistic UI — la parte que te pone nervioso
-
-Vamos a desmontar esto porque conceptualmente **ya lo hiciste**, solo que del otro lado.
+## 3. Estado global y Optimistic UI
 
 ### La idea central
-Optimistic UI es exactamente lo mismo que optimistic locking, pero en el cliente:
-asumes que la operación va a tener éxito, actualizas el estado *antes* de tener
-confirmación del servidor, y si el servidor te dice que no, revierte. Es el mismo
-principio de "actúa primero, reconcilia después" que usaste en la corrección de la
-race condition en KVS — solo que ahí la reconciliación era contra la base de datos,
-y aquí es contra la respuesta HTTP.
+Optimistic UI aplica el mismo principio que optimistic locking, pero en el cliente:
+se asume que la operación tendrá éxito, se actualiza el estado *antes* de tener
+confirmación del servidor, y si el servidor responde con error, se revierte. El
+principio es "actúa primero, reconcilia después" — la reconciliación es contra la
+respuesta HTTP en lugar de contra la base de datos.
 
 ### Cómo se implementa en la práctica (con React Query)
 
@@ -67,17 +64,16 @@ useMutation({
 })
 ```
 
-**El punto clave para que pierdas el miedo:** no estás inventando un sistema de estado
-distribuido nuevo. React Query ya trae este patrón resuelto — tu trabajo no es
-implementar el mecanismo desde cero, es *conectarlo correctamente* a cada mutación
-(crear, editar, eliminar) y decidir qué snapshot guardar. Es más config que lógica nueva.
+**El punto clave:** React Query implementa este patrón de forma nativa — no requiere
+construir el mecanismo desde cero, solo conectarlo a cada mutación (crear, editar,
+eliminar) y definir qué snapshot preservar. Es más configuración que lógica nueva.
 
 ### Por qué React Query y no Redux/Zustand para esto
 
 Redux/Zustand son buenos para estado de UI (¿está abierto el modal?, ¿qué tema está activo?).
 Pero el estado de "datos del servidor" (las VMs) es un caso distinto — tiene cache,
-expiración, reintentos, invalidación. React Query fue diseñado específicamente para eso,
-así que resuelve el 80% del optimistic UI por vos. Usaremos:
+expiración, reintentos, invalidación. React Query fue diseñado específicamente para eso
+y resuelve el 80% del optimistic UI de forma nativa. La separación de responsabilidades es:
 
 - **React Query** → estado del servidor (VMs, usuario autenticado)
 - **Zustand** → estado puro de UI (tema oscuro, modales, filtros) — mínimo boilerplate

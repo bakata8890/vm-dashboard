@@ -38,7 +38,7 @@ Browser (SPA)
 - **BFF**: único componente que conoce el JWT de sesión. Setea/lee la cookie HttpOnly.
   No tiene lógica de negocio, solo autentica y reenvía al API Core con un ID Token de GCP.
 - **API Core**: `--no-allow-unauthenticated`. Solo la service account del BFF puede invocarlo
-  (mismo patrón `SERVICE_URL` audience validation usado en FairRide SDD v5).
+  (patrón estándar de `SERVICE_URL` audience validation con OIDC en Cloud Run).
 - **WebSockets**: expuestos por el API Core, el BFF actúa como proxy WS transparente hacia el frontend.
 
 ## 4. Modelo de datos
@@ -114,11 +114,9 @@ vía header inyectado por el BFF (`X-User-Role`, `X-User-Id`) tras validar el ID
 | Secret Manager | `jwt-signing-key`, `db-credentials`, `internal-proxy-secret` — montados como variables de entorno en cada Cloud Run; nunca hardcodeados en Dockerfile ni en configs de deploy |
 | Load Balancer | routing `/api/*` → bff, `/*` → frontend, mismo dominio |
 
-**Cuenta y proyecto GCP:** se reutiliza la cuenta GCP ya activa (usada para FairRide),
-creando un **proyecto nuevo y aislado** dentro de esa misma cuenta (ej. `ifx-vm-dashboard`)
+**Cuenta y proyecto GCP:** se crea un **proyecto nuevo y aislado** (ej. `ifx-vm-dashboard`)
 para esta prueba. Esto evita:
-- Fricción de crear cuenta/billing nuevo desde cero
-- Mezclar recursos, IAM o cuotas con los proyectos de FairRide/NETO
+- Fricción de mezclar recursos con proyectos existentes
 - Riesgo de dejar recursos de la prueba corriendo dentro de un proyecto productivo
 
 Al finalizar la evaluación, el proyecto se puede apagar o eliminar sin afectar nada más.
