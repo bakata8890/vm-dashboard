@@ -1,7 +1,7 @@
 FROM node:20-alpine AS frontend
 WORKDIR /app
 COPY frontend/package*.json ./
-RUN rm -f package-lock.json && npm install --omit=dev
+RUN rm -f package-lock.json && npm install
 COPY frontend/ ./
 RUN npm run build
 

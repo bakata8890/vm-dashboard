@@ -949,6 +949,53 @@ api-core valida X-Internal-Secret antes de confiar en X-User-Id, 401 inmediato s
 
 ---
 
+## Cierre: intento de deploy a GCP — abortado por límite de tiempo
+**Fecha:** 2026-07-17 | **Agente:** claude-sonnet-4-6
+
+### Qué se intentó
+
+3 intentos de `gcloud run deploy --source` fallaron en el mismo punto del build antes de que ningún servicio quedara desplegado. Se decidió abortar y entregar con stack local Docker Compose, que está verificado end-to-end.
+
+### Problema 1 — Arquitectura: arm64 (macOS M1) vs amd64 (Cloud Build / Cloud Run)
+
+El lock file de npm (`frontend/package-lock.json`) fue generado en macOS arm64-darwin. Al hacer `gcloud run deploy --source ./frontend`, Cloud Build ejecuta `npm ci` en un agente linux/amd64. El lock no incluye los binarios opcionales para linux/x64 de rollup (`@rollup/rollup-linux-x64-gnu`) porque en macOS no se descargaron. `npm ci` falla con:
+
+```
+Cannot find module @rollup/rollup-linux-x64-gnu
+```
+
+El mismo bug aparece en Docker local con la imagen `node:20-alpine` (linux/arm64/musl) si el lock fue generado en macOS:
+
+```
+Cannot find module @rollup/rollup-linux-arm64-musl
+```
+
+**Causa raíz:** `@rollup/rollup-*` usa optional dependencies por plataforma. `npm ci` con un lockfile multiplataforma incompleto no puede instalar el binario correcto para el agente de build.
+
+### Problema 2 — Bug npm/rollup con dependencias opcionales (no resuelto en 3 intentos)
+
+Intentos de workaround:
+
+1. **Intento 1:** `npm ci --include=optional` — Cloud Build aún falla; el lock no declara la plataforma del agente como optional dependency registrada.
+2. **Intento 2:** `rm -f package-lock.json && npm install` en el Dockerfile — resuelve el problema en Docker local, pero Cloud Build usa `--source` que no acepta un Dockerfile pre-existente de la misma forma; el build de `gcloud run deploy --source` insiste en usar el buildpack detectado automáticamente (Node.js buildpack de GCP) que tiene su propio comportamiento con el lockfile.
+3. **Intento 3:** Agregar `.gcloudignore` para excluir `package-lock.json` y forzar reinstalación limpia — Cloud Build sigue fallando porque el buildpack de GCP prioriza el lockfile si existe en el contexto fuente.
+
+El error persistió en los 3 intentos sin cambiar el mensaje de falla.
+
+### Decisión de abortar
+
+Límite de tiempo de la prueba técnica. Un cuarto intento requería o bien cambiar a un Dockerfile explícito con `gcloud run deploy --source` apuntando a un contexto con Dockerfile personalizado, o bien generar el lockfile en un entorno linux/amd64. Ambas rutas tenían un tiempo de diagnóstico estimado de 30-60 min adicionales.
+
+Criterio de priorización: una entrega local completa y verificada es más honesta y útil para la evaluación que un deploy parcial con servicios caídos. El stack completo funciona en Docker Compose desde cero (`docker compose down -v && docker compose build && docker compose up`) con todos los módulos operativos.
+
+### Fix que resultó: contexto de build incorrecto en docker-compose.yml
+
+Durante la verificación final se detectó un bug adicional: `docker-compose.yml` tenía `build: ./backend/bff`, apuntando el contexto al subdirectorio del BFF. El Dockerfile del BFF usa rutas relativas a la raíz del monorepo (`COPY frontend/`, `COPY backend/bff/`). Esto funcionaba previamente solo por caché de capas de Docker; al hacer `down -v && build` desde cero fallaba con `/frontend: not found`.
+
+Fix aplicado: `context: .` + `dockerfile: backend/bff/Dockerfile` en docker-compose.yml. Verificado con build limpio y smoke test completo (login → me → vms).
+
+---
+
 ## Backend — Módulo 1: Modelo de datos + migraciones
 **Fecha:** 2026-07-17 | **Agente:** claude-sonnet-4-6
 

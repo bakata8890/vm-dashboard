@@ -65,10 +65,20 @@ docker-compose down -v
 
 ---
 
-## Despliegue en GCP
+## Estado de despliegue
 
-Arquitectura BFF con API Core privada (invocación IAM service-to-service). Detalle completo
-en `SDD-VM-Dashboard.md` §8.
+**Entrega funcional: local vía Docker Compose** (verificado end-to-end, ver guía arriba).
+
+El despliegue a GCP fue diseñado e implementado en la arquitectura (BFF + API Core privado + IAM service-to-service, Cloud SQL, Secret Manager — ver `SDD-VM-Dashboard.md` §8), pero no se completó en esta entrega por restricción de tiempo: 3 intentos fallaron en el mismo punto del build (`gcloud run deploy --source`) por un bug de npm/rollup con dependencias opcionales bajo la imagen Cloud Build (linux/amd64) que no reproduce en macOS arm64. Se decidió abortar y priorizar una entrega local completa y verificada en lugar de un deploy a medias.
+
+Ver `files/BITACORA.md` — entrada final para el detalle técnico de los intentos.
+
+### Arquitectura GCP diseñada (no desplegada)
+
+El código soporta `APP_ENV=prod` que activa:
+- Cookie `Secure` en el BFF
+- Sustitución de `X-Internal-Secret` por IAM Bearer token (OIDC service-to-service)
+- `INTERNAL_PROXY_SECRET` no requerido en prod (api-core lo omite si `APP_ENV=prod`)
 
 ### Variables de entorno requeridas en Cloud Run
 
@@ -80,7 +90,7 @@ en `SDD-VM-Dashboard.md` §8.
 | `API_CORE_URL` | bff | URL del servicio Cloud Run `api-core` |
 | `APP_ENV` | bff, api-core | `prod` |
 
-### Pasos de despliegue
+### Pasos de despliegue (diseñados, no ejecutados en esta entrega)
 
 ```bash
 # 1. Autenticarse y configurar el proyecto
@@ -134,8 +144,6 @@ gcloud run deploy frontend \
 > del metadata server de GCP y lo envía como `Authorization: Bearer <token>`.
 > La plataforma Cloud Run valida el token antes de que llegue al container —
 > `INTERNAL_PROXY_SECRET` no se usa en producción.
-
-URL de la app desplegada: `https://github.com/bakata8890/vm-dashboard` _(deploy GCP pendiente)_
 
 ---
 

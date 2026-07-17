@@ -36,7 +36,9 @@ services:
     # Sin ports: solo accesible desde la red Docker interna (por bff)
 
   bff:
-    build: ./backend/bff
+    build:
+      context: .
+      dockerfile: backend/bff/Dockerfile
     environment:
       DATABASE_URL: postgres://vm_user:vm_pass@postgres:5432/vm_db?sslmode=disable
       APP_ENV: dev
