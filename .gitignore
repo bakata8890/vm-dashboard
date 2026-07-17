@@ -1,0 +1,27 @@
+# Secretos — NUNCA versionar
+.env
+.env.local
+.env.*.local
+
+# Binarios compilados
+backend/api-core/api-core
+backend/bff/bff
+
+# Dependencias frontend
+frontend/node_modules/
+frontend/dist/
+
+# Go
+*.test
+vendor/
+
+# TypeScript build cache
+*.tsbuildinfo
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+
+# macOS
+.DS_Store

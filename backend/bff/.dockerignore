@@ -1,0 +1,6 @@
+**/*_test.go
+.env
+.env.*
+.DS_Store
+.vscode/
+.idea/

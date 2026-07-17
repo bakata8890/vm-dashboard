@@ -1,0 +1,63 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: vm_user
+      POSTGRES_PASSWORD: vm_pass
+      POSTGRES_DB: vm_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./backend/api-core/migrations/000001_create_users.up.sql:/docker-entrypoint-initdb.d/01_users.sql:ro
+      - ./backend/api-core/migrations/000002_create_vms.up.sql:/docker-entrypoint-initdb.d/02_vms.sql:ro
+      - ./backend/api-core/migrations/seed.sql:/docker-entrypoint-initdb.d/03_seed.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vm_user -d vm_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api-core:
+    build: ./backend/api-core
+    environment:
+      DATABASE_URL: postgres://vm_user:vm_pass@postgres:5432/vm_db?sslmode=disable
+      APP_ENV: dev
+      INTERNAL_PROXY_SECRET: dev-internal-secret
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    # Sin ports: solo accesible desde la red Docker interna (por bff)
+
+  bff:
+    build: ./backend/bff
+    environment:
+      DATABASE_URL: postgres://vm_user:vm_pass@postgres:5432/vm_db?sslmode=disable
+      APP_ENV: dev
+      JWT_SECRET: dev-jwt-secret-change-in-prod
+      API_CORE_URL: http://api-core:8080
+      INTERNAL_PROXY_SECRET: dev-internal-secret
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api-core:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3001:80"
+    depends_on:
+      bff:
+        condition: service_started
+
+volumes:
+  pgdata:
